@@ -1,0 +1,125 @@
+---
+title: "Lab 03"
+author: "Melissa Schiavon Pastene (270324)"
+format: html
+editor: visual
+---
+
+**1. Importe, utilizando o pacote readr, cada um dos três arquivos disponíveis. Os objetos resultantes devem ser chamados flights, airlines e airports. (Instruções)**
+
+```{r}
+
+library(readr)
+library(dplyr)
+library(stringr)
+
+airports <- read_csv("airports.csv",
+                     col_types = cols_only(
+                       IATA_CODE = col_character(),
+                       CITY = col_character(),
+                       STATE = col_character(),
+                       LATITUDE = col_double(),
+                       LONGITUDE = col_double()
+                     ) )
+
+airlines <- read_csv("airlines.csv", show_col_types = FALSE)
+
+getStats <- function(input, pos){
+  input %>%
+    filter(
+      !str_starts(DESTINATION_AIRPORT, "I"),
+      !is.na(DESTINATION_AIRPORT),
+      !is.na(ARRIVAL_DELAY)
+    ) %>%
+    group_by(DESTINATION_AIRPORT) %>%
+    summarise(
+      soma = sum(ARRIVAL_DELAY),
+      total = n()
+    )
+}
+
+flights <- read_csv_chunked("flights.csv.zip",
+                            callback = DataFrameCallback$new(getStats),
+                            chunk_size = 1000000,
+                            col_types = cols_only(
+                              DESTINATION_AIRPORT = col_character(),
+                              ARRIVAL_DELAY = col_double()
+                            ))
+
+flights <- flights %>%
+  group_by(DESTINATION_AIRPORT) %>%
+  summarise(
+    soma = sum(soma),
+    n = sum(total)
+  ) %>%
+  mutate(
+    atraso_medio = soma/n
+  )
+
+
+```
+
+2. Selecione a operação apropriada join para incluir, na tabela flights, as colunas CITY e STATE do objeto airports.
+
+```{r}
+
+flights <- flights %>%
+  left_join(
+    airports %>%
+      select(IATA_CODE, CITY, STATE),
+    by = c("DESTINATION_AIRPORT" = "IATA_CODE")
+  )
+
+flights
+
+#Eu não entendi bem a questão de 'flights' ter mais linhas que 'airports' e causa o NA em alguns voos
+
+```
+
+3. Quantos aeroportos cada estado possui? Apresente uma tabela ordenada de forma decrescente (no número de aeroportos).
+
+```{r}
+
+airports %>%
+  group_by(STATE) %>%
+  summarise(
+    numero_aeroportos = n()
+  ) %>%
+  arrange(desc(numero_aeroportos))
+
+```
+
+4. Apresente um mapa representando todos os atrasos observados por aeroporto.
+
+```{r}
+library(leaflet)
+
+flights <- flights %>%
+  left_join(
+    airports %>%
+      select(IATA_CODE, LATITUDE, LONGITUDE),
+    by = c("DESTINATION_AIRPORT" = "IATA_CODE")
+  )
+
+
+this <- flights %>%
+  filter(
+    !is.na(LATITUDE),
+    !is.na(LONGITUDE)
+    ) %>%
+  leaflet() %>%
+  addTiles() %>%
+  addMarkers(
+    lng = ~LONGITUDE,
+    lat = ~LATITUDE
+  )
+
+this
+
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
+
