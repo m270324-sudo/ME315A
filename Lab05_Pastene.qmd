@@ -1,0 +1,124 @@
+---
+title: "Laboratório 5"
+author: "Melissa Schiavon Pastene (270324)"
+format: pdf
+editor: visual
+---
+
+# Preparos
+## Pacotes
+
+```{r}
+
+library(tidyverse)
+library(leaflet)
+library(ggcal)
+
+```
+
+## Informações dos Aeroportos
+
+```{r}
+
+airports <- read_csv("airports.csv",
+                     col_types = cols_only(
+                       IATA_CODE = col_character(),
+                       LATITUDE = col_double(),
+                       LONGITUDE = col_double()
+                     ) )
+
+```
+
+
+# Crie uma função
+
+```{r}
+
+analisa_aeronave <- function(tail_number, arquivo){
+  getStats <- function(input, pos) {
+  input %>%
+    filter(`CANCELLED` == 0,
+           TAIL_NUMBER == tail_number)}
+  
+  flights <- read_csv_chunked(arquivo,
+                              callback = DataFrameCallback$new(getStats),
+                              chunk_size = 1e5,
+                              col_types = cols())
+  
+  flights <- flights %>%
+    mutate(DATE = as.Date(paste(YEAR, MONTH, DAY, sep = "-")
+                          )
+           ) %>%
+    arrange(DATE, DEPARTURE_TIME)
+  
+  origin <- airports %>%
+    select(
+      ORIGIN_AIRPORT = IATA_CODE,
+      ORIGIN_LAT = LATITUDE,
+      ORIGIN_LON = LONGITUDE
+    )
+  
+  destination <- airports %>%
+    select(
+      DESTINATION_AIRPORT = IATA_CODE,
+      DEST_LAT = LATITUDE,
+      DEST_LON = LONGITUDE
+      
+     
+    )
+  
+  flights <- flights %>%
+    left_join(origin, by = "ORIGIN_AIRPORT") %>%
+    left_join(destination, by = "DESTINATION_AIRPORT")
+  
+  
+  mapa <- leaflet() %>%
+    addTiles()
+  
+  for (i in 1:nrow(flights)){
+    
+    mapa <- mapa %>%
+      addPolylines(
+        lng = c(
+          flights$ORIGIN_LON[i],
+          flights$DEST_LON[i]
+        ),
+        lat = c(
+          flights$ORIGIN_LAT[i],
+          flights$DEST_LAT[i]
+        ),
+        weight = 1
+      )
+  }
+  
+  print(mapa)
+  
+  return(
+    list(
+      tabela = flights,
+      grafico = mapa))
+}
+
+```
+
+
+#Mapa
+
+```{r}
+
+resultado <- analisa_aeronave(
+  "N431WN", file.path("flights.csv.zip")
+)
+
+resultado$tabela
+  
+```
+
+Compilação de Data/Hora:
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+
+```
+
