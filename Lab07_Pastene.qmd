@@ -1,0 +1,127 @@
+---
+title: "Lab07"
+author: "Melissa Schiavon Pastene (270324)"
+format: pdf
+editor: visual
+---
+
+1.  Baixe o arquivo uwmadison.sqlite3. Conecte-se a ele usando o pacote RSQLite, armazenando a conexão em uma variável conn.
+
+```{r}
+
+library(RSQLite)
+
+path <- "."
+fname <- file.path(path, "uwmadison.sqlite3")
+conn = dbConnect(SQLite(), fname)
+
+```
+
+
+2.  Quem são e quantos são os professores que lecionaram disciplinas cujo tópico era estatística (subjects.abbreviation='STAT');
+
+```{r}
+
+# Código EXTRA usado exclusivamente para auxiliar a identificar colunas a serem usadas no JOIN
+
+tabelas <- dbListTables(conn)
+
+for (tabela in tabelas) {
+  cat("\nTabela:", tabela, "\n")
+  print(dbListFields(conn, tabela))
+}
+
+```
+
+```{r}
+
+professores_stat = dbGetQuery(conn,
+	 'SELECT instructors.name, subjects.abbreviation FROM instructors
+	  JOIN teachings
+	  	ON instructors.id = teachings.instructor_id 
+	  JOIN sections
+		  ON teachings.section_uuid = sections.uuid
+	  JOIN subject_memberships
+		  ON sections.course_offering_uuid = subject_memberships.course_offering_uuid
+	  JOIN subjects
+		  ON subject_memberships.subject_code = subjects.code
+	  WHERE subjects.abbreviation = "STAT"
+	  GROUP BY instructors.name
+	 ')
+
+professores_stat
+dim(professores_stat)
+
+```
+
+3. O GPA americano é definido numa escala de 0 a 4, em que A = 4, AB = 3.5, B = 3, BC = 2.5, C = 2, D = 1 e F = 0. Determinando a nota média de cada oferecimento pela ponderação da quantidade de alunos em cada extrato com os valores numéricos de cada conceito, indique (no que se referente a disciplinas no assunto de estatística):
+
+```{r}
+GPA_professores <- dbGetQuery(conn,'SELECT instructors.name as professor, subjects.name as disciplina, (
+  4*a_count +
+  3.5*ab_count +
+  3*b_count + 2.5*bc_count 
+  + 2*c_count +
+  d_count)/ (
+    a_count + 
+    ab_count + 
+    b_count + 
+    bc_count + 
+    c_count + 
+    d_count + 
+    f_count) AS GPA 
+    FROM instructors
+    
+    JOIN teachings
+	  	ON instructors.id = teachings.instructor_id 
+	  	
+	  JOIN sections
+		  ON teachings.section_uuid = sections.uuid
+		  
+		JOIN grade_distributions 
+		  ON sections.number = grade_distributions.section_number
+		    AND sections.course_offering_uuid = grade_distributions.course_offering_uuid
+		  
+	  JOIN subject_memberships
+		  ON grade_distributions.course_offering_uuid = subject_memberships.course_offering_uuid
+		  
+	  JOIN subjects
+		  ON subject_memberships.subject_code = subjects.code
+		  
+	WHERE subjects.abbreviation = "STAT"
+  GROUP BY instructors.name')
+
+
+```
+
+- Quem é o professor mais difícil?
+- Quem é o professor mais fácil?
+- Qual é a disciplina mais difícil?
+- Qual é a disciplina mais fácil?
+
+```{r}
+
+library(tidyverse)
+
+professor_facil <- GPA_professores %>%
+  filter(GPA == max(GPA, na.rm = TRUE))
+
+professor_dificil <- GPA_professores %>%
+  filter(GPA == min(GPA, na.rm = TRUE))
+
+professor_facil
+professor_dificil
+
+# Só existe uma única displina de Estatística = 'Statistics', Por tanto ela vai ser a mais difícil e mais fácil de qualquer maneira
+
+```
+
+
+```{r}
+dbDisconnect(conn)
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
